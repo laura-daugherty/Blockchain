@@ -11,6 +11,7 @@ class Blockchain(object):
         self.current_transactions = []
         # Create the genesis block
         self.new_block(previous_hash=1, proof=100)
+
     def new_block(self, proof, previous_hash=None):
         """
         Create a new Block in the Blockchain
@@ -37,6 +38,7 @@ class Blockchain(object):
         self.chain.append(block)
         # Return the new block
         return block
+
     def hash(self, block):
         """
         Creates a SHA-256 hash of a Block
@@ -47,7 +49,7 @@ class Blockchain(object):
         # Use hashlib.sha256 to create a hash
         # It requires a `bytes-like` object, which is what
         # .encode() does.
-        # It convertes the string to bytes.
+        # It converts the string to bytes.
         # We must make sure that the Dictionary is Ordered,
         # or we'll have inconsistent hashes
         # TODO: Create the block_string
@@ -62,9 +64,11 @@ class Blockchain(object):
         # easier to work with and understand
         # TODO: Return the hashed block string in hexadecimal format
         return hex_hash
+
     @property
     def last_block(self):
         return self.chain[-1]
+
     # def proof_of_work(self, block):
     #     """
     #     Simple Proof of Work Algorithm
@@ -78,6 +82,7 @@ class Blockchain(object):
     #     while self.valid_proof(block_string, proof) is False:
     #         proof += 1
     #     return proof
+
     @staticmethod
     def valid_proof(block_string, proof):
         """
@@ -92,33 +97,75 @@ class Blockchain(object):
         """
         guess = f"{block_string}{proof}".encode()
         guess_hash = hashlib.sha256(guess).hexdigest()
-        return guess_hash[:6] == "000000"
+        return guess_hash[:3] == "000"
+
 # Instantiate our Node
 app = Flask(__name__)
 # Generate a globally unique address for this node
 node_identifier = str(uuid4()).replace('-', '')
 # Instantiate the Blockchain
 blockchain = Blockchain()
+
 @app.route('/mine', methods=['POST'])
 def mine():
-    # Run the proof of work algorithm to get the next proof
     data = request.get_json()
-    print("~~~~~~~~~~~~~~~~~~", data)
-    proof = blockchain.proof_of_work(blockchain.last_block)
-    if not data.proof:
-      err = {
-        "error": "no proof"
+    required = ['proof', 'id']
+    if not all (k in data for k in required):
+      response = {'message': 'missing values'}
+      return jsonify(response), 400
+    
+    last_block = blockchain.last_block
+    last_block_string = json.dumps(last_block, sort_keys=True)
+     # Run the proof of work algorithm to get the next proof
+    if blockchain.valid_proof(last_block_string, data['proof']):
+    # Forge the new Block by adding it to the chain with the proof
+      previous_hash = blockchain.hash(blockchain.last_block)
+      block = blockchain.new_block(data['proof'], previous_hash)
+      response = {
+        'response': 'SUCCESS',
+        'new_block': block
       }
-      return jsonify(err), 400
-    elif not data.id:
-      err = {
-        "error": "no ID"
+      return jsonify(response), 200
+    else:
+      response = {
+        'response': 'FAILURE'
       }
-      return jsonify(err), 400
-    response = {
-      "message": "SUCCESS"
-    }
-    return jsonify(response), 200
+      return jsonify(response), 200
+
+
+
+
+
+
+
+    # Run the proof of work algorithm to get the next proof
+    # data = request.get_json()
+    # print("~~~~~~~~~~~~~~~~~~", data)
+    # if not data.proof:
+    #   err = {
+    #     "error": "no proof"
+    #   }
+    #   return jsonify(err), 400
+    # elif not data.id:
+    #   err = {
+    #     "error": "no ID"
+    #   }
+    #   return jsonify(err), 400
+
+    # temp = valid_proof(data.id, data.proof)
+    # if temp == True:
+    #   response = {
+    #     "message": "SUCCESS"
+    #   }
+    #   return jsonify(response), 200
+    # else:
+    #   response = {
+    #     "message": "FAILURE"
+    #   }
+    #   return jsonify(response), 400
+
+
+
 @app.route('/chain', methods=['GET'])
 def full_chain():
     response = {
@@ -134,6 +181,7 @@ def last_block():
         'last_block': blockchain.last_block
     }
     return jsonify(response), 200
+
 # Run the program on port 5000
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
